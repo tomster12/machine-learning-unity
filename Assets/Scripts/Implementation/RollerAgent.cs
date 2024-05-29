@@ -26,7 +26,7 @@ public class RollerAgent : Agent
         float distanceToTarget = Vector3.Distance(transform.position, world.Target);
         if (distanceToTarget < targetRadius)
         {
-            fitness = 1.0f + 1f / (genomeIndex);
+            fitness = rb.velocity.magnitude;
             rb.isKinematic = true;
             hasEvaluated = true;
         }

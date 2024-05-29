@@ -19,7 +19,20 @@ public abstract class Agent : MonoBehaviour
     public abstract Genome GetGenome();
 }
 
-public abstract class World : MonoBehaviour
+public interface IGenepoolListener
+{
+    void OnInitGenepool();
+
+    void OnStartPopulation();
+
+    void OnPreEvaluateGeneration();
+
+    void OnPostEvaluateGeneration();
+
+    void OnEndGeneration();
+}
+
+public abstract class World : MonoBehaviour, IGenepoolListener
 {
     public virtual void OnInitGenepool()
     { }
@@ -27,10 +40,13 @@ public abstract class World : MonoBehaviour
     public virtual void OnStartPopulation()
     { }
 
+    public virtual void OnPostEvaluateGeneration()
+    { }
+
     public virtual void OnPreEvaluateGeneration()
     { }
 
-    public virtual void OnPostEvaluateGeneration()
+    public virtual void OnEndGeneration()
     { }
 
     public abstract Agent CreateAgent(Genome genome);
@@ -38,11 +54,22 @@ public abstract class World : MonoBehaviour
 
 public class Genepool : MonoBehaviour
 {
-    public int Generation { get; private set; } = 0;
-    public bool IsGenepoolInitialized { get; private set; } = false;
-    public bool IsPopulationEvaluated { get; private set; } = false;
+    public string PopulationSize
+    {
+        get => populationSize.ToString();
+        set
+        {
+            if (int.TryParse(value, out int result)) populationSize = result;
+            else populationSize = 0;
+        }
+    }
 
-    [ContextMenu("Init Genepool")]
+    public int Generation { get; private set; } = 0;
+    public float BestFitness { get; private set; } = 0.0f;
+    public bool ToEvaluate { get => toEvaluate; set => toEvaluate = value; }
+    public bool ToQuickEvaluate { get => toQuickEvaluate; set => toQuickEvaluate = value; }
+    public bool ToIterate { get => toIterate; set => toIterate = value; }
+
     public void InitGenepool()
     {
         ClearAgents();
@@ -51,19 +78,22 @@ public class Genepool : MonoBehaviour
         agents = new List<Agent>();
         for (int i = 0; i < populationSize; i++) agents.Add(world.CreateAgent(null));
         Generation = 0;
-        IsGenepoolInitialized = true;
+        isGenepoolInitialized = true;
 
-        Debug.Log("Genepool initialized with " + populationSize + " agents");
-        world.OnInitGenepool();
-        world.OnStartPopulation();
+        AddListener(world);
+        for (int i = 0; i < listeners.Count; i++)
+        {
+            listeners[i].OnInitGenepool();
+            listeners[i].OnStartPopulation();
+        }
     }
 
     public void EvaluatePopulation()
     {
-        if (!IsGenepoolInitialized) return;
+        if (!isGenepoolInitialized) return;
         if (IsPopulationEvaluated) return;
 
-        world.OnPreEvaluateGeneration();
+        for (int i = 0; i < listeners.Count; i++) listeners[i].OnPreEvaluateGeneration();
 
         // Evaluate all agents in the population
         IsPopulationEvaluated = true;
@@ -73,23 +103,21 @@ public class Genepool : MonoBehaviour
             if (!agent.HasEvaluated()) IsPopulationEvaluated = false;
         }
 
-        if (IsPopulationEvaluated) Debug.Log("Generation " + Generation + " evaluated");
-
-        world.OnPostEvaluateGeneration();
+        for (int i = 0; i < listeners.Count; i++) listeners[i].OnPostEvaluateGeneration();
     }
 
     public void IterateGeneration()
     {
-        if (!IsGenepoolInitialized) return;
+        if (!isGenepoolInitialized) return;
         if (!IsPopulationEvaluated) return;
 
         // Sort agents by fitness
         agents.Sort((a, b) => a.GetFitness().CompareTo(b.GetFitness()));
-        Debug.Log("Generation " + Generation + " best fitness: " + agents[agents.Count - 1].GetFitness());
 
         // Create new population with best agent
         List<Genome> nextGenomes = new List<Genome>();
         nextGenomes.Add(agents[agents.Count - 1].GetGenome());
+        BestFitness = agents[agents.Count - 1].GetFitness();
 
         // Select parents for crossover
         int childCount = populationSize - 1;
@@ -111,7 +139,17 @@ public class Genepool : MonoBehaviour
         Generation++;
         IsPopulationEvaluated = false;
 
-        world.OnStartPopulation();
+        for (int i = 0; i < listeners.Count; i++)
+        {
+            listeners[i].OnEndGeneration();
+            listeners[i].OnStartPopulation();
+        }
+    }
+
+    public void AddListener(IGenepoolListener listener)
+    {
+        if (listeners == null) listeners = new List<IGenepoolListener>();
+        listeners.Add(listener);
     }
 
     [Header("Genepool Settings")]
@@ -124,10 +162,20 @@ public class Genepool : MonoBehaviour
     [SerializeField] private bool toQuickEvaluate;
     [SerializeField] private bool toIterate;
 
+    private bool isGenepoolInitialized = false;
+    private bool IsPopulationEvaluated = false;
     private List<Agent> agents;
+    private List<IGenepoolListener> listeners;
+
+    private void Start()
+    {
+        InitGenepool();
+    }
 
     private void Update()
     {
+        if (!isGenepoolInitialized) return;
+
         if (toEvaluate)
         {
             if (toQuickEvaluate)
@@ -150,7 +198,7 @@ public class Genepool : MonoBehaviour
         agents.Clear();
     }
 
-    protected static List<Agent> SelectTournament(List<Agent> agents, int tournamentSize, int count)
+    private static List<Agent> SelectTournament(List<Agent> agents, int tournamentSize, int count)
     {
         List<Agent> selected = new List<Agent>();
         for (int i = 0; i < count; i++)
