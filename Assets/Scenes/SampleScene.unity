@@ -3450,7 +3450,7 @@ MonoBehaviour:
   target: {fileID: 439973666}
   timeStep: 0.02
   tiltX: -105
-  tiltYSpeed: 110
+  tiltYSpeed: 4
 --- !u!1 &1811938868
 GameObject:
   m_ObjectHideFlags: 0
@@ -3922,8 +3922,8 @@ SceneRoots:
   m_Roots:
   - {fileID: 963194228}
   - {fileID: 705507995}
-  - {fileID: 1699850993}
   - {fileID: 1303094099}
   - {fileID: 253643400}
+  - {fileID: 1699850993}
   - {fileID: 1517759449}
   - {fileID: 439973666}
